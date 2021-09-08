@@ -23,10 +23,13 @@ colnames(beach_lab_data) <- clean_names
 
 # clean data
 beach_lab_data$dna_sample_date<- as.Date(substr(beach_lab_data$dna_sample_timestamp,1,10), format ="%m/%d/%Y" )
-beach_lab_data$dna_reading_mean <- ifelse(is_null())
+beach_lab_data$dna_reading_mean <- ifelse(beach_lab_data$dna_reading_mean == 'NULL',
+                                          NA,
+                                          beach_lab_data$dna_reading_mean
+                                          )
 
 # TO DO : CLEAN '20' YEARS TO 2020
-beach_lab_data$dna_sample_date <- iselse(year(beach_lab_data))
+# beach_lab_data$dna_sample_date <- isfelse(year(beach_lab_data))
 
 sapply(beach_lab_data, function(x) length(unique(x)))
 

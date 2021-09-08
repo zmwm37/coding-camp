@@ -10,13 +10,13 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Introduction
-For many beaches along and near the Chicago lakefront, the University of Illinois at Chicago conducts daily water quality testing from around Memorial Day until about Labor Day looking at levels of a bacteria called Enterococci. The data is posted online by the Chicago Park System. Colored flags are also raised at each beach depending on the most recent reading: (bacteria levels < 1000 CCE)
+For many beaches along and near the Chicago lakefront, the University of Illinois at Chicago conducts daily water quality testing from around Memorial Day until about Labor Day looking at levels of a bacteria called Enterococci. The data is posted online by the Chicago Park System. Colored flags are also raised at each beach depending on the most recent reading: (bacteria levels < 1000 CCE):  
 - green: water quality is safe for swimming  
 - yellow: water quality is unsafe for swimming  (bacteria levels > 1000 CCE)
 
-Water quality can vary greatly across the beaches, and some beaches are cleaner than others.  
+Water quality can vary greatly across the beaches, and some beaches have cleanrer water than others.  
 
-``` {r libraries & data, echo = F}
+``` {r libraries & data, echo = F, results = F, message = F}
 setwd('~/Documents/coding-camp/final-project/')
 
 
@@ -33,10 +33,72 @@ library(corrplot)
 beach_lab_data <- read_delim('Beach_Lab_Data.csv', delim = ';')
 ```
 
-```{r clean data, echo  = FALSE }
+```{r clean data, echo  = FALSE, results = F, message = F}
+
+# clean names
+clean_names <- gsub(' ', '_', str_to_lower(names(beach_lab_data)))
+colnames(beach_lab_data) <- clean_names
+
+# clean data
+beach_lab_data$dna_sample_date<- as.Date(substr(beach_lab_data$dna_sample_timestamp,1,10), format ="%m/%d/%Y" )
+beach_lab_data$dna_reading_mean <- ifelse(beach_lab_data$dna_reading_mean == 'NULL',
+                                          NA,
+                                          beach_lab_data$dna_reading_mean
+                                          )
+
+
+# filter to DNA test only
+dna_data <- beach_lab_data %>% 
+  filter(!is.na(`dna_test_id`)) %>%
+  select(dna_test_id, dna_sample_timestamp,dna_sample_date, beach,dna_sample_1_reading,
+         dna_sample_2_reading, dna_reading_mean, latitude, longitude, location) %>%
+  distinct
+
+# summary stats by beach for 2021
+dna_smry <-dna_data %>%
+  filter(year(dna_sample_date) == 2021) %>%
+  group_by(beach) %>%
+  summarize(mean_reading = mean(dna_reading_mean),
+            median_reading = median(dna_reading_mean),
+            n_readings = n(),
+            days_over_1000 = sum(dna_reading_mean > 1000),
+            days_over_1000_pcnt = days_over_1000/n_readings*100,
+            first_date = min(dna_sample_date),
+            last_date = max(dna_sample_date),
+            date_range = last_date - first_date
+           
+  ) %>%
+  arrange(desc(days_over_1000_pcnt)) %>%
+  mutate(beach = as.factor(beach))
+
+# ordered beaches for plot
+ordered_beaches <- as.vector(dna_smry$beach)
+
 ```
 
-```{r analyze data }
+
+## Analysis
+```{r analyze data, echo = F }
+anno_x <- c(2.5,3, 12)
+anno_y <- c(22,17.5, 6.5)
+anno_label <- c('This is a pond','Dog beach...', 'The Point!')
+
+ggplot(dna_smry, aes(x = beach, y = days_over_1000_pcnt, fill =  days_over_1000_pcnt)) +
+  geom_bar(stat = 'identity') + 
+  scale_x_discrete(limits = c(ordered_beaches))+
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  scale_fill_viridis(option = "turbo")+
+  # scale_fill_viridis(option = "plasma")+
+  annotate('text',x = anno_x, y = anno_y, size = 2.7, color = 'gray20',
+           label = anno_label) + 
+           # label = paste(ji('dog2'),ji('island'),'=', emo::ji('dog2'), emo::ji('poop')))
+  # geom_curve(data = curved.arrows, aes(x = x1, y = y1, xend = x2, yend = y2),
+  #            arrow = arrow(length = unit(0.07, "inch")), size = 0.4,
+  #            color = "gray20", curvature = 0.2
+  labs(x = "Beach Location", y = 'Percent of Days Over 1,000 CCE', 
+       title = "Which Beaches Have Poor Water Quality Most Often? (2021)",
+       subtitle = 'Chicago measures water quality most days at several beaches from Memorial Day\nto Labor Day. The CDC recommends not going in water when readings are above 1,000 CCE.')
+
 
 ```
 
