@@ -1,5 +1,5 @@
 ---
-title: "Coding Camp Final Project"
+title: "Coding Camp Final Project - Chicago Beach Water Quality"
 author: "Zander Meitus"
 date: "9/8/2021"
 output: pdf_document
@@ -14,9 +14,14 @@ For many beaches along and near the Chicago lakefront, the University of Illinoi
 - green: water quality is safe for swimming  
 - yellow: water quality is unsafe for swimming  (bacteria levels > 1000 CCE)
 
-Water quality can vary greatly across the beaches, and some beaches have cleanrer water than others.  
+In this analysis, I'll look at data collected in 2021 for Chicago beaches.
 
-``` {r libraries & data, echo = F, results = F, message = F}
+## Data Overview
+
+
+Water quality can vary greatly across the beaches, and some beaches have cleanrer water than others. 
+
+``` {r libraries & data, echo = F, results = F, message = F, warning = F}
 setwd('~/Documents/coding-camp/final-project/')
 
 
@@ -48,14 +53,18 @@ beach_lab_data$dna_reading_mean <- ifelse(beach_lab_data$dna_reading_mean == 'NU
 
 
 # filter to DNA test only
-dna_data <- beach_lab_data %>% 
+dna_data21 <- beach_lab_data %>% 
   filter(!is.na(`dna_test_id`)) %>%
   select(dna_test_id, dna_sample_timestamp,dna_sample_date, beach,dna_sample_1_reading,
          dna_sample_2_reading, dna_reading_mean, latitude, longitude, location) %>%
-  distinct
+  distinct() # some rows had duplicate entries for same beach-time. removing them here.
+```
 
+
+## Table
+```{r summarize data, warning = F, error = F}
 # summary stats by beach for 2021
-dna_smry <-dna_data %>%
+dna_smry <-dna_data21 %>%
   filter(year(dna_sample_date) == 2021) %>%
   group_by(beach) %>%
   summarize(mean_reading = mean(dna_reading_mean),
@@ -74,15 +83,19 @@ dna_smry <-dna_data %>%
 # ordered beaches for plot
 ordered_beaches <- as.vector(dna_smry$beach)
 
+dna_smry
+
 ```
 
 
-## Analysis
-```{r analyze data, echo = F }
+## Graph
+```{r visualize data, warning = F, error = F}
+# create plot annotations
 anno_x <- c(2.5,3, 12)
 anno_y <- c(22,17.5, 6.5)
 anno_label <- c('This is a pond','Dog beach...', 'The Point!')
 
+# plot 
 ggplot(dna_smry, aes(x = beach, y = days_over_1000_pcnt, fill =  days_over_1000_pcnt)) +
   geom_bar(stat = 'identity') + 
   scale_x_discrete(limits = c(ordered_beaches))+
@@ -96,9 +109,30 @@ ggplot(dna_smry, aes(x = beach, y = days_over_1000_pcnt, fill =  days_over_1000_
   #            arrow = arrow(length = unit(0.07, "inch")), size = 0.4,
   #            color = "gray20", curvature = 0.2
   labs(x = "Beach Location", y = 'Percent of Days Over 1,000 CCE', 
-       title = "Which Beaches Have Poor Water Quality Most Often? (2021)",
-       subtitle = 'Chicago measures water quality most days at several beaches from Memorial Day\nto Labor Day. The CDC recommends not going in water when readings are above 1,000 CCE.')
+       title = "Which Beaches Have Poor Water Quality Most Often? (2021)"
+       )
 
 
 ```
 
+## Appendix
+In my exploratory analysis, there were several things I wanted to check to make sure I was evaluating the data appropriately.
+
+It's important to look at the timeframe of measurements to see if they are consistent within and across beaches.
+```{r appendix, message = F, error = F}
+
+```
+
+It's always a good idea to check out distributions!
+```{r distribution, error = F, message=F}
+# 2021 distributions by beach
+ggplot(dna_data21 %>% filter(year(dna_sample_date)== 2021), aes(x = beach, y = log10(dna_reading_mean), fill = beach)) +
+  geom_violin()+
+  # geom_boxplot() +
+  # geom_point(position = 'jitter') +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+
+
+And for kicks, I wanted to see if the relationship between different beaches' water quality.
