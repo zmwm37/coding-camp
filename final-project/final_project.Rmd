@@ -10,42 +10,43 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Introduction
-For many beaches along and near the Chicago lakefront, the University of Illinois at Chicago conducts daily water quality testing from around Memorial Day until about Labor Day looking at levels of a bacteria called Enterococci. The data is posted online by the Chicago Park System. Colored flags are also raised at each beach depending on the most recent reading: (bacteria levels < 1000 CCE):  
-- green: water quality is safe for swimming  
-- yellow: water quality is unsafe for swimming  (bacteria levels > 1000 CCE)
+For many beaches along and near the Chicago lakefront, the University of Illinois at Chicago conducts daily water quality testing from around Memorial Day until about Labor Day looking at levels of a bacteria called Enterococci. The data is posted online by the Chicago Park System. Colored flags are also raised at each beach depending on the most recent reading:  
+- green: water quality is safe for swimming (bacteria levels < 1000 CCE)  
+- yellow: water quality is unsafe for swimming (bacteria levels > 1000 CCE)  
 
 In this analysis, I'll look at data collected in 2021 for Chicago beaches.
 
-## Data Overview
-
-
-Water quality can vary greatly across the beaches, and some beaches have cleanrer water than others. 
-
-``` {r libraries & data, echo = F, results = F, message = F, warning = F}
+## Data Cleaning & Wrangling
+Let's load up some libraries and data
+``` {r libraries & data, results = F, message = F, warning = F, error = F}
 setwd('~/Documents/coding-camp/final-project/')
 
 
 # READ LIBRARIES & DATA ---------------------------------------------------
 
-library(tidyverse)
-library(stringr)
-library(lubridate)
-library(viridis)
-library(emo)
-library(corrplot)
+library(tidyverse) 
+library(stringr) # working with strings
+library(lubridate) #working with dates
+library(viridis) # cool color palettes
+library(corrplot) # correlation plots
 
 # source: https://data.cityofchicago.org/Parks-Recreation/Beach-Lab-Data/2ivx-z93u
 beach_lab_data <- read_delim('Beach_Lab_Data.csv', delim = ';')
-```
 
-```{r clean data, echo  = FALSE, results = F, message = F}
+# tried api, only gave me first 1000 rows. Probably something I'm not doing
+# beach_lab_data <- read_csv('https://data.cityofchicago.org/resource/2ivx-z93u.csv')
+```
+And we need to do some minor cleaning.
+```{r clean data, results = F, message = F, warning = F, error = F}
 
 # clean names
 clean_names <- gsub(' ', '_', str_to_lower(names(beach_lab_data)))
 colnames(beach_lab_data) <- clean_names
 
 # clean data
-beach_lab_data$dna_sample_date<- as.Date(substr(beach_lab_data$dna_sample_timestamp,1,10), format ="%m/%d/%Y" )
+beach_lab_data$dna_sample_date<- as.Date(substr(beach_lab_data$dna_sample_timestamp,1,10), 
+                                         format ="%m/%d/%Y" 
+                                         )
 beach_lab_data$dna_reading_mean <- ifelse(beach_lab_data$dna_reading_mean == 'NULL',
                                           NA,
                                           beach_lab_data$dna_reading_mean
@@ -54,18 +55,26 @@ beach_lab_data$dna_reading_mean <- ifelse(beach_lab_data$dna_reading_mean == 'NU
 
 # filter to DNA test only
 dna_data21 <- beach_lab_data %>% 
-  filter(!is.na(`dna_test_id`)) %>%
-  select(dna_test_id, dna_sample_timestamp,dna_sample_date, beach,dna_sample_1_reading,
-         dna_sample_2_reading, dna_reading_mean, latitude, longitude, location) %>%
+  filter(!is.na(`dna_test_id`),
+         year(dna_sample_date) == 2021) %>%
+  select(dna_test_id, 
+         dna_sample_timestamp, 
+         dna_sample_date, 
+         beach,dna_sample_1_reading,
+         dna_sample_2_reading, 
+         dna_reading_mean, 
+         latitude, 
+         longitude, 
+         location) %>%
   distinct() # some rows had duplicate entries for same beach-time. removing them here.
 ```
 
 
 ## Table
+Water quality can vary greatly across the beaches, and some beaches have cleanrer water than others. Let's look at the average and median of water quality at each beach in 2021, as well as the number of days and percent of days where water was unsafe at each beach.
 ```{r summarize data, warning = F, error = F}
 # summary stats by beach for 2021
 dna_smry <-dna_data21 %>%
-  filter(year(dna_sample_date) == 2021) %>%
   group_by(beach) %>%
   summarize(mean_reading = mean(dna_reading_mean),
             median_reading = median(dna_reading_mean),
@@ -80,51 +89,65 @@ dna_smry <-dna_data21 %>%
   arrange(desc(days_over_1000_pcnt)) %>%
   mutate(beach = as.factor(beach))
 
+dna_smry %>%
+  select(beach,n_readings, mean_reading, median_reading,days_over_1000, days_over_1000_pcnt)
+
+```
+Humboldt has by far the highest average reading, as well as the highest percentage of days over 1000 CCE. Let's visualize these results to make the message clearer.
+
+## Graph
+While there are a lot of factors that go into water quality at each beach, some beaches have dangerous water quality levels much more frequently than others.
+```{r visualize data, warning = F, error = F, message = F}
+# create plot annotations
+anno_x <- c(4,4.25, 14)
+anno_y <- c(24,18.5, 8)
+anno_label <- c('This is a pond','Dog beach...', 'The Point!')
+
+# create annotation arrows
+x1 <- c(2.5,3, 13)
+x2 <- x1  - 1
+y1 <- c(24,18.5, 8)
+y2 <- y1 - 1
+
+curved.arrows <- tibble(x1, x2, y1, y2)
+
 # ordered beaches for plot
 ordered_beaches <- as.vector(dna_smry$beach)
 
-dna_smry
-
-```
-
-
-## Graph
-```{r visualize data, warning = F, error = F}
-# create plot annotations
-anno_x <- c(2.5,3, 12)
-anno_y <- c(22,17.5, 6.5)
-anno_label <- c('This is a pond','Dog beach...', 'The Point!')
-
 # plot 
-ggplot(dna_smry, aes(x = beach, y = days_over_1000_pcnt, fill =  days_over_1000_pcnt)) +
-  geom_bar(stat = 'identity') + 
-  scale_x_discrete(limits = c(ordered_beaches))+
-  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  scale_fill_viridis(option = "turbo")+
-  # scale_fill_viridis(option = "plasma")+
-  annotate('text',x = anno_x, y = anno_y, size = 2.7, color = 'gray20',
-           label = anno_label) + 
-           # label = paste(ji('dog2'),ji('island'),'=', emo::ji('dog2'), emo::ji('poop')))
-  # geom_curve(data = curved.arrows, aes(x = x1, y = y1, xend = x2, yend = y2),
-  #            arrow = arrow(length = unit(0.07, "inch")), size = 0.4,
-  #            color = "gray20", curvature = 0.2
+ggplot(data = dna_smry, aes(x = beach, y = days_over_1000_pcnt, fill = ..y..)) +
+  geom_bar(data = dna_smry, stat = 'identity') + 
+  scale_x_discrete(limits = c(ordered_beaches)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_viridis(option = "turbo", name = '% Days > 1000 CCE') + # https://statisticsglobe.com/change-legend-title-ggplot-r
   labs(x = "Beach Location", y = 'Percent of Days Over 1,000 CCE', 
-       title = "Which Beaches Have Poor Water Quality Most Often? (2021)"
-       )
+     title = "Which Beaches Have Poor Water Quality Most Often? (2021)"
+     ) +
+  annotate('text',x = anno_x, y = anno_y, size = 2.7, color = 'gray20',
+           label = anno_label)+
+  geom_curve(data = curved.arrows, aes(x = x1, y = y1, xend = x2, yend = y2),
+             arrow = arrow(length = unit(0.07, "inch")), size = 0.4,
+             color = "gray20", curvature = 0.2)
 
 
 ```
+Humboldt beach is not in Lake Michigan, it is actually a beach on a pond. The concentration in the small body of water might explain why its water quality is at dangerous levels the most often. Montrose beach has a massive dog beach area. While it's a blast for the pups, it doesn't bode well for people who want to swim there... Thankfully for UChicago students, 57th street beach next to Promontory Point rarely has dangerous water quality levels.
 
 ## Appendix
 In my exploratory analysis, there were several things I wanted to check to make sure I was evaluating the data appropriately.
 
-It's important to look at the timeframe of measurements to see if they are consistent within and across beaches.
+### Measurement Timeframe
+It's important to look at the timeframe of measurements to see if they are consistent within and across beaches. Most beaches have near-daily readings from around Memorial Day to Labor Day. Humboldt is the big exception, which starts later and ends earlier with measurements. However, looking at the measurement dates for Humboldt across all beaches yields similar results: Humboldt water is gross!
 ```{r appendix, message = F, error = F}
-
+dna_smry %>% 
+  select(n_readings, first_date,last_date, date_range) %>% 
+  mutate(pcnt_days_measured = n_readings/(as.numeric(date_range)+1)*100) %>%
+  arrange(date_range)
 ```
 
+### Distributions
 It's always a good idea to check out distributions!
-```{r distribution, error = F, message=F}
+```{r distribution, error = F, message = F}
 # 2021 distributions by beach
 ggplot(dna_data21 %>% filter(year(dna_sample_date)== 2021), aes(x = beach, y = log10(dna_reading_mean), fill = beach)) +
   geom_violin()+
@@ -132,7 +155,20 @@ ggplot(dna_data21 %>% filter(year(dna_sample_date)== 2021), aes(x = beach, y = l
   # geom_point(position = 'jitter') +
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 ```
+The distributions for each beach overlap significantly and they have a wide range, so checking daily readings is important. Don't assume a given beach is clean!
 
 
+### Inter-Beach Correlation
+And for kicks, I wanted to see if the relationship between different beaches' water quality. 
+```{r correlation, error = F, message = F}
+dna_data_wide <- dna_data21 %>% 
+  select(dna_sample_date, beach, dna_reading_mean) %>%
+  # mutate(dna_reading_mean = ifelse(dna_reading_mean == 'NULL', NA, dna_reading_mean)) %>%
+  pivot_wider(names_from = beach, values_from = dna_reading_mean)
 
-And for kicks, I wanted to see if the relationship between different beaches' water quality.
+dna_corr <- cor(dna_data_wide %>%
+                  select( -dna_sample_date), use = 'complete.obs')
+
+corrplot(dna_corr, method = 'circle')
+
+```
