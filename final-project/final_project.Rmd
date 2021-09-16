@@ -137,13 +137,38 @@ Humboldt beach is not in Lake Michigan, it is actually a beach on a pond. The co
 In my exploratory analysis, there were several things I wanted to check to make sure I was evaluating the data appropriately.
 
 ### Measurement Timeframe
-It's important to look at the timeframe of measurements to see if they are consistent within and across beaches. Most beaches have near-daily readings from around Memorial Day to Labor Day. Humboldt is the big exception, which starts later and ends earlier with measurements. However, looking at the measurement dates for Humboldt across all beaches yields similar results: Humboldt water is gross!
+It's important to look at the timeframe of measurements to see if they are consistent within and across beaches. Most beaches have near-daily readings from around Memorial Day to Labor Day. Humboldt is the big exception, which starts later and ends earlier with measurements. 
 ```{r appendix, message = F, error = F}
 dna_smry %>% 
   select(n_readings, first_date,last_date, date_range) %>% 
   mutate(pcnt_days_measured = n_readings/(as.numeric(date_range)+1)*100) %>%
   arrange(date_range)
 ```
+However, looking at the measurement dates for Humboldt across all beaches yields similar results: Humboldt water is gross!
+```{r}
+# get start and end dates for Humboldt
+humboldt_start <- min(dna_data21[dna_data21$beach == 'Humboldt',]$dna_sample_date)
+humboldt_end <- max(dna_data21[dna_data21$beach == 'Humboldt',]$dna_sample_date)
+
+# filter data to 2021 Humboldt dates
+dna_data21 %>%
+  filter(dna_sample_date >= humboldt_start & dna_sample_date <= humboldt_end) %>%
+  group_by(beach) %>%
+  summarize(mean_reading = mean(dna_reading_mean),
+            median_reading = median(dna_reading_mean),
+            n_readings = n(),
+            days_over_1000 = sum(dna_reading_mean > 1000),
+            days_over_1000_pcnt = days_over_1000/n_readings*100,
+            first_date = min(dna_sample_date),
+            last_date = max(dna_sample_date),
+            date_range = last_date - first_date
+           
+  ) %>%
+  arrange(desc(days_over_1000_pcnt)) %>%
+  mutate(beach = as.factor(beach))
+```
+
+
 
 ### Distributions
 It's always a good idea to check out distributions!
@@ -159,7 +184,7 @@ The distributions for each beach overlap significantly and they have a wide rang
 
 
 ### Inter-Beach Correlation
-And for kicks, I wanted to see if the relationship between different beaches' water quality. 
+And for kicks, I wanted to see the relationship between different beaches' water quality. 
 ```{r correlation, error = F, message = F}
 dna_data_wide <- dna_data21 %>% 
   select(dna_sample_date, beach, dna_reading_mean) %>%
